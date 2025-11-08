@@ -1,0 +1,1 @@
+ST slope,exercise angina,chest pain type,max heart rate,oldpeak,sex,age
