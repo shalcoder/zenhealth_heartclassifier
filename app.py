@@ -117,27 +117,28 @@ with tab2:
     else:
         pred = st.session_state.prediction
 
-        # Show prediction summary
         st.subheader("Prediction Summary")
         st.write(f"**Result:** {'No Disease' if pred['result'] == 0 else 'Disease Detected'}")
         st.write(f"**Disease Probability:** {pred['prob'][1] * 100:.1f}%")
 
         st.error("""
-        This assistant is for healthcare professionals (nurses, doctors).
-        It explains probable causes, prevention, clinical management suggestions,
-        and reasoning related **only** to the predicted cardiac condition.
+        This assistant explains cardiac results in **simple language**.
+        It answers ONLY heart-related questions. If the question is unrelated,
+        it will politely decline.
         """)
 
         question = st.text_area(
-            "Enter a clinical question related to the detected cardiac condition:",
-            placeholder="Example: What preventive measures can we take if disease probability is high?"
+            "Enter a question about heart health:",
+            placeholder="Example: How can I reduce my heart disease risk?",
         )
 
         if st.button("Ask Gemini"):
-            if question.strip() == "":
+            if not question.strip():
                 st.warning("Please enter a question.")
             else:
                 try:
+                    import requests  # ensure requests is available
+
                     API_KEY = st.secrets["GEMINI_API_KEY"]
                     MODEL_NAME = st.secrets.get("GEMINI_MODEL", "models/gemini-2.5-flash")
 
@@ -147,46 +148,51 @@ with tab2:
                         "Possible Cardiac Disease / Risk Detected"
                     )
 
-                    # Build system + user prompt
+                    # SIMPLE LANGUAGE + RESTRICTED TOPIC PROMPT
                     sys_prompt = f"""
-                    You are a clinical assistant for healthcare professionals.
-                    Discuss ONLY heart/cardiac disease risk and cardiac parameters such as:
-                    ST slope, exercise angina, chest pain type, max heart rate, ST depression (oldpeak), age, sex.
+You are a heart-health assistant.
 
-                    Patient info:
-                    - Prediction result from ML model: {predicted_text}
-                    - Probability of disease: {pred['prob'][1] * 100:.1f}%
-                    - Inputs: {pred['inputs']}
+Audience:
+- Normal people (not doctors, not medical experts)
+- They need simple, easy-to-understand language.
 
-                    Required structure:
-                    1. Summary of the predicted cardiac risk
-                    2. Possible causes or contributing factors based on input
-                    3. Preventive / immediate actions
-                    4. Diagnostic or management suggestions clinicians can consider
-                    5. Clinical reasoning
+Rules:
 
-                    Do NOT provide definitive diagnosis. Never assume patient symptoms beyond given inputs.
-                    """
+1. If the question is related to heart or cardiac health:
+      • Explain in **simple language**.
+      • Use 5–7 short sentences.
+      • Avoid medical terminology unless necessary.
+      • Give practical and easy suggestions (diet, lifestyle, habit changes).
+      • Do NOT mention probabilities, model details, or ST slope, unless asked.
+
+2. If the question is NOT related to cardiac/heart health:
+      Reply EXACTLY:
+      "I can answer only questions related to heart health."
+
+3. NEVER give a diagnosis. Never sound like a doctor.
+
+Patient info from ML model:
+- Prediction result: {predicted_text}
+- Probability of cardiac disease: {pred['prob'][1] * 100:.1f}%
+- Patient Inputs: {pred['inputs']}
+"""
 
                     data = {
                         "contents": [
-                            {
-                                "parts": [{"text": sys_prompt + "\nClinician Question: " + question}]
-                            }
+                            {"parts": [{"text": sys_prompt + "\nUser Question: " + question}]}
                         ]
                     }
 
                     URL = f"https://generativelanguage.googleapis.com/v1beta/{MODEL_NAME}:generateContent?key={API_KEY}"
                     headers = {"Content-Type": "application/json"}
 
-                    with st.spinner("Connecting to Gemini..."):
+                    with st.spinner("Getting answer from Gemini..."):
                         response = requests.post(URL, headers=headers, json=data)
 
                     if response.status_code == 200:
                         reply = response.json()["candidates"][0]["content"]["parts"][0]["text"]
-                        st.subheader("Gemini's Clinical Insight")
+                        st.subheader("Answer")
                         st.write(reply)
-                        st.info("Always verify recommendations with clinical judgment and hospital protocol.")
                     else:
                         st.error("❌ Gemini API Error: " + response.text)
 
